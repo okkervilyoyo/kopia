@@ -51,7 +51,7 @@ var PackBlobIDPrefixes = []blob.ID{
 }
 
 const (
-	parallelFetches          = 5                // number of parallel reads goroutines
+	parallelFetches          = 50               // number of parallel reads goroutines
 	flushPackIndexTimeout    = 10 * time.Minute // time after which all pending indexes are flushes
 	defaultMinPreambleLength = 32
 	defaultMaxPreambleLength = 32

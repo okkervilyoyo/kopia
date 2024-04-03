@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/alecthomas/kingpin/v2"
 	"math"
 	"os"
 	"path/filepath"
@@ -97,6 +98,34 @@ followed by the path of the directory for the contents to be restored.
 	unlimitedDepth = math.MaxInt32
 )
 
+type objectReaderOptionsFlags struct {
+	disableReadAhead bool
+	readAheadMB      int64
+}
+
+func (c *objectReaderOptionsFlags) setup(cmd *kingpin.CmdClause) {
+	cmd.Flag("disable-read-ahead", "Disable read-ahead").BoolVar(&c.disableReadAhead)
+	cmd.Flag("read-ahead-mb", "Amount of bytes (in MB) to read-ahead in large objects (default=auto)").Int64Var(&c.readAheadMB)
+}
+
+func (c *objectReaderOptionsFlags) applyObjectReaderOptions(ctx context.Context) context.Context {
+	if c.disableReadAhead {
+		// negative value disables read-ahead
+		return object.WithReaderOptions(ctx, object.ReaderOptions{
+			ReadAheadBytes: -1,
+		})
+	}
+
+	if c.readAheadMB == 0 {
+		// default
+		return ctx
+	}
+
+	return object.WithReaderOptions(ctx, object.ReaderOptions{
+		ReadAheadBytes: c.readAheadMB * 1e6,
+	})
+}
+
 type restoreSourceTarget struct {
 	source        string
 	target        string
@@ -123,6 +152,8 @@ type commandRestore struct {
 	minSizeForPlaceholder         int32
 	snapshotTime                  string
 
+	objectReaderOptionsFlags
+
 	restores []restoreSourceTarget
 }
 
@@ -148,6 +179,7 @@ func (c *commandRestore) setup(svc appServices, parent commandParent) {
 	cmd.Flag("shallow", "Shallow restore the directory hierarchy starting at this level (default is to deep restore the entire hierarchy.)").Int32Var(&c.restoreShallowAtDepth)
 	cmd.Flag("shallow-minsize", "When doing a shallow restore, write actual files instead of placeholders smaller than this size.").Int32Var(&c.minSizeForPlaceholder)
 	cmd.Flag("snapshot-time", "When using a path as the source, use the latest snapshot available before this date. Default is latest").StringVar(&c.snapshotTime)
+	c.objectReaderOptionsFlags.setup(cmd)
 	cmd.Action(svc.repositoryReaderAction(c.run))
 }
 
